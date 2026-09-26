@@ -10,7 +10,6 @@ const User = require('../models/userModel');
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken') */
 
-const jwt = require('jsonwebtoken')
 require('dotenv').config();
 
 //Register
@@ -30,13 +29,12 @@ router.post("/logout",logout)
 router.get("/refetch", verifyToken, async (req, res) => {
     try {
         // Fetch the full user data from the database using the userId from the JWT
-        const user = await User.findById(req.userId).select('-password').populate('bookmarks');
+        const user = await User.findById(req.userId);
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
         }
         
-        // Send the full user data including bookmarks to the frontend
-        console.log(user);
+        user.bookmarks = await User.getBookmarks(req.userId);
         res.status(200).json(user);
     } catch (error) {
         console.error('Error fetching user data:', error);

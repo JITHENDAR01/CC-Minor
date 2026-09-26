@@ -7,7 +7,7 @@ import { BiEdit } from 'react-icons/bi';
 import { MdDelete, MdBookmark , MdThumbUp } from 'react-icons/md';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../utils/api';
-import { URL, IF } from '../url';
+import { URL, imageUrl } from '../url';
 import { UserContext } from '../Context/UserContext';
 
 const PostDetails = () => {
@@ -177,7 +177,7 @@ const PostDetails = () => {
                     {/* Image */}
                     <div className="clearfix mb-6">
                         <img
-                            src={`${IF}${post.photo}`}
+                            src={imageUrl(post.photo)}
                             alt="Post Visual"
                             className="float-left w-[45%] mr-6 mb-4 rounded-lg"
                         />

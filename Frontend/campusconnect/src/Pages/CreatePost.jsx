@@ -40,17 +40,14 @@ const CreatePost = () => {
 
     if(file){
       const formData = new FormData();
-      const filename = Date.now()+file.name;
-      formData.append('img', filename);
       formData.append("file",file)
-      post.photo=filename
-      //img upload
       try{
         const imgUpload = await api.post("/upload",formData)
-        //console.log(imgUpload.data)
+        post.photo = imgUpload.data.url;
       }
       catch(err){
         console.error(err);
+        return;
       }
     }
     

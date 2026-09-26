@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 // eslint-disable-next-line no-unused-vars
 import React from "react";
-import {IF} from '../url';
+import {imageUrl} from '../url';
 
 const HomePosts = ({ post }) => {
   return (
@@ -9,7 +9,7 @@ const HomePosts = ({ post }) => {
       {/* left - Image section */}
       <div className="w-[35%] h-[200px] flex justify-center items-center">
         <img
-          src={IF + post.photo}
+          src={imageUrl(post.photo)}
           alt={post.title}
           className="h-full w-[80%]  object-cover rounded-lg hover:scale-105 transition-transform duration-300"
         />

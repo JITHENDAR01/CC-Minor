@@ -46,11 +46,54 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+    - name: Configure ECS task definition
+      id: configure-task-def
+      env:
+        ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
+        ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+        DATABASE_URL_SECRET_ARN: ${{ vars.DATABASE_URL_SECRET_ARN }}
+        SECRET_KEY_SECRET_ARN: ${{ vars.SECRET_KEY_SECRET_ARN }}
+        S3_BUCKET: ${{ vars.S3_BUCKET }}
+        S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
+      run: |
+        set -euo pipefail
+        : "${ECS_EXECUTION_ROLE_ARN:?Set ECS_EXECUTION_ROLE_ARN in the production environment}"
+        : "${ECS_TASK_ROLE_ARN:?Set ECS_TASK_ROLE_ARN in the production environment}"
+        : "${DATABASE_URL_SECRET_ARN:?Set DATABASE_URL_SECRET_ARN in the production environment}"
+        : "${SECRET_KEY_SECRET_ARN:?Set SECRET_KEY_SECRET_ARN in the production environment}"
+        : "${S3_BUCKET:?Set S3_BUCKET in the production environment}"
+
+        S3_PUBLIC_URL="${S3_PUBLIC_URL:-https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com}"
+        jq \
+          --arg execution_role "$ECS_EXECUTION_ROLE_ARN" \
+          --arg task_role "$ECS_TASK_ROLE_ARN" \
+          --arg database_url_secret "$DATABASE_URL_SECRET_ARN" \
+          --arg secret_key_secret "$SECRET_KEY_SECRET_ARN" \
+          --arg s3_bucket "$S3_BUCKET" \
+          --arg s3_public_url "$S3_PUBLIC_URL" \
+          --arg container_name "$CONTAINER_NAME" \
+          '.executionRoleArn = $execution_role
+           | .taskRoleArn = $task_role
+           | .containerDefinitions |= map(
+               if .name == $container_name then
+                 .secrets = [
+                   {name: "DATABASE_URL", valueFrom: $database_url_secret},
+                   {name: "SECRET_KEY", valueFrom: $secret_key_secret}
+                 ]
+                 | .environment += [
+                     {name: "S3_BUCKET", value: $s3_bucket},
+                     {name: "S3_PUBLIC_URL", value: $s3_public_url}
+                   ]
+               else . end
+             )' \
+          "$ECS_TASK_DEFINITION" > "$RUNNER_TEMP/task-definition.json"
+        echo "task-definition=$RUNNER_TEMP/task-definition.json" >> "$GITHUB_OUTPUT"
+
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
-        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        task-definition: ${{ steps.configure-task-def.outputs.task-definition }}
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.build-image.outputs.image }}
 

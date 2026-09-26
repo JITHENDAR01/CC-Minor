@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import { Navigate, useNavigate } from 'react-router-dom';
-import {IF} from '../url'
+import {imageUrl} from '../url'
 
 const ProfilePosts = ({p}) => {
   // console.log(p)
@@ -9,7 +9,7 @@ const ProfilePosts = ({p}) => {
     <div className="w-full flex mt-8 space-x-4">
     {/* left */}
     <div className="w-[35%] h-[200px] flex justify-center items-center">
-    <img src={IF+p.photo} alt="" className="h-full w-full object-cover"/>
+    <img src={imageUrl(p.photo)} alt="" className="h-full w-full object-cover"/>
     </div>
     {/* right */}
     <div className="flex flex-col w-[65%] cursor-pointer"  onClick={()=>{Navigate(`/posts/post/${p._id}`)}}>

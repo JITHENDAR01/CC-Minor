@@ -1,0 +1,9 @@
+.git
+.github
+.vscode
+Frontend
+Backend/node_modules
+Backend/uploads
+**/.env
+**/.env.*
+*.log

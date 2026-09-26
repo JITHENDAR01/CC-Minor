@@ -5,7 +5,7 @@ import { ImCross } from 'react-icons/im';
 import { useNavigate, useParams } from "react-router-dom";
 import { UserContext } from "../Context/UserContext";
 import api from '../utils/api';
-import {IF} from '../url'
+import {imageUrl} from '../url'
 const EditPost = () => {
   const { user } = useContext(UserContext);
   const navigate = useNavigate();
@@ -69,13 +69,11 @@ const EditPost = () => {
     
     if (file) {
       const formData = new FormData();
-      const filename = Date.now() + file.name;
-      formData.append('img', filename);
       formData.append("file", file);
-      post.photo = filename;
 
       try {
-        await api.post("/upload", formData);
+        const upload = await api.post("/upload", formData);
+        post.photo = upload.data.url;
       } catch (err) {
         console.error(err);
         return;
@@ -121,7 +119,7 @@ const EditPost = () => {
             <img src={imgPreview} alt="Preview" className="mt-4 w-32 h-32 object-cover" /> 
           :
           
-            <img src={IF+imgPreview} alt="Preview" className="mt-4 w-32 h-32 object-cover" />
+            <img src={imageUrl(imgPreview)} alt="Preview" className="mt-4 w-32 h-32 object-cover" />
           
         }
           <div className="flex flex-col space-y-3">
