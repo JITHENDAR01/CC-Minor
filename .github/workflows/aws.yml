@@ -49,19 +49,19 @@ jobs:
     - name: Configure ECS task definition
       id: configure-task-def
       env:
-        ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
-        ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
-        DATABASE_URL_SECRET_ARN: ${{ vars.DATABASE_URL_SECRET_ARN }}
-        SECRET_KEY_SECRET_ARN: ${{ vars.SECRET_KEY_SECRET_ARN }}
+        ECS_EXECUTION_ROLE_ARN: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+        ECS_TASK_ROLE_ARN: ${{ secrets.ECS_TASK_ROLE_ARN }}
+        DATABASE_URL_SECRET_ARN: ${{ secrets.DATABASE_URL_SECRET_ARN }}
+        SECRET_KEY_SECRET_ARN: ${{ secrets.SECRET_KEY_SECRET_ARN }}
         S3_BUCKET: ${{ vars.S3_BUCKET }}
         S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
       run: |
         set -euo pipefail
-        : "${ECS_EXECUTION_ROLE_ARN:?Set ECS_EXECUTION_ROLE_ARN in the production environment}"
-        : "${ECS_TASK_ROLE_ARN:?Set ECS_TASK_ROLE_ARN in the production environment}"
-        : "${DATABASE_URL_SECRET_ARN:?Set DATABASE_URL_SECRET_ARN in the production environment}"
-        : "${SECRET_KEY_SECRET_ARN:?Set SECRET_KEY_SECRET_ARN in the production environment}"
-        : "${S3_BUCKET:?Set S3_BUCKET in the production environment}"
+        : "${ECS_EXECUTION_ROLE_ARN:?Set ECS_EXECUTION_ROLE_ARN in GitHub Secrets}"
+        : "${ECS_TASK_ROLE_ARN:?Set ECS_TASK_ROLE_ARN in GitHub Secrets}"
+        : "${DATABASE_URL_SECRET_ARN:?Set DATABASE_URL_SECRET_ARN in GitHub Secrets}"
+        : "${SECRET_KEY_SECRET_ARN:?Set SECRET_KEY_SECRET_ARN in GitHub Secrets}"
+        : "${S3_BUCKET:?Set S3_BUCKET in GitHub Variables}"
 
         S3_PUBLIC_URL="${S3_PUBLIC_URL:-https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com}"
         jq \
