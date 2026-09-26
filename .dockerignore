@@ -1,9 +1,12 @@
 .git
 .github
 .vscode
-Frontend
 Backend/node_modules
 Backend/uploads
+**/node_modules
+**/dist
+**/dist-ssr
+**/*.local
 **/.env
 **/.env.*
 *.log

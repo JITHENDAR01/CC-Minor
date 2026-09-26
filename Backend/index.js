@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -14,6 +15,7 @@ const commentRoute = require('./routes/commentRoute');
 
 const app = express();
 const PORT = process.env.PORT || 80;
+const frontendIndex = path.join(__dirname, 'public', 'index.html');
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
@@ -47,6 +49,16 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         return res.status(500).json({ message: 'Image upload failed' });
     }
 });
+
+if (fs.existsSync(frontendIndex)) {
+    app.use(express.static(path.dirname(frontendIndex)));
+    app.get('*', (req, res) => {
+        if (req.path === '/api' || req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+            return res.status(404).json({ message: 'Not found' });
+        }
+        return res.sendFile(frontendIndex);
+    });
+}
 
 async function startServer() {
     await initializeDatabase();

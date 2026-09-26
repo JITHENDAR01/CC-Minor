@@ -1,5 +1,6 @@
-export const URL = "http://localhost:80/";
-export const IF = "http://localhost:80/uploads/" //IF stands for image folder , we are not getting that image so we fetch it like this
+const backendUrl = import.meta.env.PROD ? "/" : "http://localhost:80/";
+export const URL = backendUrl;
+export const IF = `${backendUrl}uploads/`;
 export const imageUrl = (photo) => {
 	if (!photo) return "";
 	return /^https?:\/\//i.test(photo) ? photo : IF + photo;
