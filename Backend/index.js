@@ -13,7 +13,7 @@ const postRoute = require('./routes/postRoute');
 const commentRoute = require('./routes/commentRoute');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 80;
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
