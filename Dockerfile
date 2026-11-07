@@ -1,4 +1,4 @@
-FROM node:18-bookworm-slim AS frontend-build
+FROM node:20-bookworm-slim AS frontend-build
 
 WORKDIR /frontend
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY Frontend/campusconnect/ ./
 RUN npm run build
 
-FROM node:18-bookworm-slim
+FROM node:20-bookworm-slim
 
 ENV NODE_ENV=production
 ENV PORT=80

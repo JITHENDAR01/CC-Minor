@@ -1,7 +1,17 @@
 const { Pool } = require('pg');
 
+const databaseConfig = process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL }
+    : {
+        host: process.env.PGHOST,
+        port: Number(process.env.PGPORT || 5432),
+        database: process.env.PGDATABASE,
+        user: process.env.PGUSER,
+        password: process.env.PGPASSWORD,
+    };
+
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    ...databaseConfig,
     ...(process.env.PGSSL === 'true' ? { ssl: true } : {}),
 });
 
@@ -54,8 +64,13 @@ const schema = [
 ];
 
 async function initializeDatabase() {
-    if (!process.env.DATABASE_URL) {
-        throw new Error('DATABASE_URL is required');
+    if (!process.env.DATABASE_URL && !(
+        process.env.PGHOST
+        && process.env.PGDATABASE
+        && process.env.PGUSER
+        && process.env.PGPASSWORD
+    )) {
+        throw new Error('Set DATABASE_URL or all of PGHOST, PGDATABASE, PGUSER, and PGPASSWORD');
     }
 
     await pool.query('SELECT 1');

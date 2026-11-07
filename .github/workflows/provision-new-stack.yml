@@ -1,0 +1,187 @@
+name: Provision and deploy new CampusConnect stack
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: campusconnect-new-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-north-1
+  STACK_NAME: campusconnect-new
+
+jobs:
+  provision-and-deploy:
+    name: Provision AWS stack and deploy app
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity and deploy infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+          prefix_list_id="$(aws ec2 describe-prefix-lists \
+            --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
+            --query 'PrefixLists[0].PrefixListId' --output text)"
+          if [[ -z "$prefix_list_id" || "$prefix_list_id" == "None" ]]; then
+            echo "Could not find CloudFront origin-facing prefix list in ${AWS_REGION}." >&2
+            exit 1
+          fi
+          aws cloudformation deploy \
+            --template-file infra/campusconnect.yaml \
+            --stack-name "$STACK_NAME" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides CloudFrontPrefixListId="$prefix_list_id" \
+            --no-fail-on-empty-changeset
+
+          outputs="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query 'Stacks[0].Outputs' --output json)"
+          output_value() {
+            jq -er --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<< "$outputs"
+          }
+          {
+            echo "ECR_REPOSITORY_URI=$(output_value EcrRepositoryUri)"
+            echo "ECR_REPOSITORY_NAME=$(output_value EcrRepositoryName)"
+            echo "ECS_CLUSTER=$(output_value EcsClusterName)"
+            echo "ECS_SERVICE=$(output_value EcsServiceName)"
+            echo "TASK_FAMILY=$(output_value TaskDefinitionFamily)"
+            echo "EXECUTION_ROLE_ARN=$(output_value TaskExecutionRoleArn)"
+            echo "TASK_ROLE_ARN=$(output_value AppTaskRoleArn)"
+            echo "DB_HOST=$(output_value DatabaseEndpoint)"
+            echo "DB_NAME=$(output_value DatabaseName)"
+            echo "DB_USER=$(output_value DatabaseUsername)"
+            echo "DB_SECRET_ARN=$(output_value DatabaseSecretArn)"
+            echo "SIGNING_SECRET_ARN=$(output_value AppSigningSecretArn)"
+            echo "S3_BUCKET=$(output_value UploadsBucketName)"
+            echo "S3_PUBLIC_URL=$(output_value AppUrl)"
+            echo "FRONTEND_BUCKET=$(output_value FrontendBucketName)"
+            echo "CLOUDFRONT_DISTRIBUTION_ID=$(output_value CloudFrontDistributionId)"
+            echo "LOG_GROUP=$(output_value LogGroupName)"
+            echo "APP_URL=$(output_value AppUrl)"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Node.js for frontend build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: Frontend/campusconnect/package-lock.json
+
+      - name: Build and publish frontend
+        shell: bash
+        working-directory: Frontend/campusconnect
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          aws s3 sync dist/ "s3://${FRONTEND_BUCKET}/" \
+            --delete --exclude index.html \
+            --cache-control 'public,max-age=31536000,immutable'
+          aws s3 cp dist/index.html "s3://${FRONTEND_BUCKET}/index.html" \
+            --cache-control 'no-cache,no-store,must-revalidate' \
+            --content-type 'text/html; charset=utf-8'
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image on GitHub runner
+        id: build-image
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          image="${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
+          docker build --file Dockerfile.backend --tag "$image" .
+          docker push "$image"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Register task definition and start service
+        shell: bash
+        run: |
+          set -euo pipefail
+          task_definition="$RUNNER_TEMP/campusconnect-task-definition.json"
+          jq -n \
+            --arg family "$TASK_FAMILY" \
+            --arg execution_role "$EXECUTION_ROLE_ARN" \
+            --arg task_role "$TASK_ROLE_ARN" \
+            --arg image "$IMAGE" \
+            --arg db_host "$DB_HOST" \
+            --arg db_name "$DB_NAME" \
+            --arg db_user "$DB_USER" \
+            --arg db_secret "$DB_SECRET_ARN:password::" \
+            --arg signing_secret "$SIGNING_SECRET_ARN" \
+            --arg bucket "$S3_BUCKET" \
+            --arg public_url "$S3_PUBLIC_URL" \
+            --arg region "$AWS_REGION" \
+            --arg log_group "$LOG_GROUP" \
+            '{
+              family: $family,
+              networkMode: "awsvpc",
+              requiresCompatibilities: ["FARGATE"],
+              cpu: "256",
+              memory: "512",
+              executionRoleArn: $execution_role,
+              taskRoleArn: $task_role,
+              containerDefinitions: [{
+                name: "Main",
+                image: $image,
+                essential: true,
+                portMappings: [{containerPort: 80, protocol: "tcp"}],
+                environment: [
+                  {name: "PORT", value: "80"},
+                  {name: "PGHOST", value: $db_host},
+                  {name: "PGPORT", value: "5432"},
+                  {name: "PGDATABASE", value: $db_name},
+                  {name: "PGUSER", value: $db_user},
+                  {name: "PGSSL", value: "false"},
+                  {name: "AWS_REGION", value: $region},
+                  {name: "S3_BUCKET", value: $bucket},
+                  {name: "S3_PUBLIC_URL", value: $public_url}
+                ],
+                secrets: [
+                  {name: "PGPASSWORD", valueFrom: $db_secret},
+                  {name: "SECRET_KEY", valueFrom: $signing_secret}
+                ],
+                logConfiguration: {
+                  logDriver: "awslogs",
+                  options: {
+                    "awslogs-group": $log_group,
+                    "awslogs-region": $region,
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                }
+              }]
+            }' > "$task_definition"
+
+          task_definition_arn="$(aws ecs register-task-definition \
+            --cli-input-json "file://${task_definition}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)"
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "$task_definition_arn" \
+            --desired-count 1 >/dev/null
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths '/*' >/dev/null
+          echo "CampusConnect deployed: ${APP_URL}"

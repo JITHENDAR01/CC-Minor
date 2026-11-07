@@ -31,6 +31,7 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(cookieParser());
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 app.use('/api/auth', authRoute);
 app.use('/api/users', userRoute);
 app.use('/api/posts', postRoute);
